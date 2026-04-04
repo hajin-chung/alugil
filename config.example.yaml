@@ -1,0 +1,7 @@
+listen_addr: ":8080"
+log_path: "./alugil.log"
+services:
+  docmost: [3000]
+  filebrowser: [80]
+  authelia: [9091]
+  go2rtc: [1984, 8554]
