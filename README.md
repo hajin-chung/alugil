@@ -50,6 +50,14 @@ Build the image:
 Run it:
 - `docker run --rm -p 8080:8080 -v "$PWD/config.yaml:/app/config.yaml:ro" alugil -config /app/config.yaml`
 
+Compose example:
+- see `docker-compose.yaml`
+- it assumes:
+  - external network `proxy-net`
+  - Traefik routes `route.deps.me` to this container
+  - your real config lives at `./config.yaml`
+  - logs are written under `./logs`
+
 ## Current structure
 
 ```text

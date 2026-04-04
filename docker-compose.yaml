@@ -1,0 +1,22 @@
+services:
+  alugil:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alugil
+    command: ["-config", "/app/config.yaml"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.alugil.rule=Host(`route.deps.me`)"
+      - "traefik.http.routers.alugil.entrypoints=web"
+      - "traefik.http.services.alugil.loadbalancer.server.port=8080"
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
