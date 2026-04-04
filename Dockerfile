@@ -17,4 +17,3 @@ COPY config.example.yaml /app/config.example.yaml
 USER appuser
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/alugil"]
-CMD ["-config", "/app/config.example.yaml"]
