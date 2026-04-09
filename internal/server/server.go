@@ -80,32 +80,32 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(route.url)
-	proxy.Transport = s.transport
-	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
-		status := http.StatusBadGateway
-		if errors.Is(proxyErr, context.DeadlineExceeded) {
-			status = http.StatusGatewayTimeout
-		}
-		http.Error(rw, http.StatusText(status), status)
-		s.log("error", "proxy failed", map[string]any{
-			"method":      r.Method,
-			"service":     route.service,
-			"port":        route.port,
-			"path":        route.path,
-			"upstream":    route.url.String(),
-			"status":      status,
-			"duration_ms": time.Since(started).Milliseconds(),
-			"error":       proxyErr.Error(),
-		})
-	}
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.URL.Path = route.path
-		req.URL.RawPath = route.path
-		req.URL.RawQuery = r.URL.RawQuery
-		req.Host = route.url.Host
+	proxy := &httputil.ReverseProxy{
+		Transport: s.transport,
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme = route.url.Scheme
+			pr.Out.URL.Host = route.url.Host
+			pr.Out.URL.Path = route.path
+			pr.Out.URL.RawPath = route.path
+			pr.Out.URL.RawQuery = r.URL.RawQuery
+		},
+		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
+			status := http.StatusBadGateway
+			if errors.Is(proxyErr, context.DeadlineExceeded) {
+				status = http.StatusGatewayTimeout
+			}
+			http.Error(rw, http.StatusText(status), status)
+			s.log("error", "proxy failed", map[string]any{
+				"method":      r.Method,
+				"service":     route.service,
+				"port":        route.port,
+				"path":        route.path,
+				"upstream":    route.url.String(),
+				"status":      status,
+				"duration_ms": time.Since(started).Milliseconds(),
+				"error":       proxyErr.Error(),
+			})
+		},
 	}
 
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}

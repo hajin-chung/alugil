@@ -92,10 +92,9 @@ func defaultTransport() http.RoundTripper {
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
-		IdleConnTimeout:       60 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
 	}
 }
 
