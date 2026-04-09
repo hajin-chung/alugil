@@ -92,6 +92,19 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if route.path == "/" {
+		setContextCookie(w, route.service, route.port)
+		http.Redirect(w, r, "/", http.StatusFound)
+		s.log("info", "context redirect", map[string]any{
+			"method":      r.Method,
+			"service":     route.service,
+			"port":        route.port,
+			"status":      http.StatusFound,
+			"duration_ms": time.Since(started).Milliseconds(),
+		})
+		return
+	}
+
 	s.serveProxy(w, r, route, started)
 }
 

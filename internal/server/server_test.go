@@ -220,3 +220,63 @@ func TestCookieContextDisallowedServiceValidRoute(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
 	}
 }
+
+func TestContextRedirectOnEntry(t *testing.T) {
+	s := newTestServer(t, config.Config{Services: map[string][]int{"filebrowser": {80}}})
+
+	tests := []struct {
+		path string
+	}{
+		{path: "/filebrowser/80"},
+		{path: "/filebrowser/80/"},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+		rr := httptest.NewRecorder()
+
+		s.Handler().ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Fatalf("path %s: status = %d, want %d", tt.path, rr.Code, http.StatusFound)
+		}
+		loc := rr.Header().Get("Location")
+		if loc != "/" {
+			t.Fatalf("path %s: location = %q, want %q", tt.path, loc, "/")
+		}
+		cookie := rr.Result().Cookies()
+		if len(cookie) == 0 || cookie[0].Name != "alugil_ctx" || cookie[0].Value != "filebrowser:80" {
+			t.Fatalf("path %s: expected alugil_ctx=filebrowser:80 cookie", tt.path)
+		}
+	}
+}
+
+func TestNoRedirectOnSubPath(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer backend.Close()
+
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+	serviceName := "filebrowser"
+	servicePort := 80
+	s := newTestServer(t, config.Config{Services: map[string][]int{serviceName: {servicePort}}})
+	s.transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if addr == net.JoinHostPort(serviceName, strconv.Itoa(servicePort)) {
+				addr = backendAddr
+			}
+			var d net.Dialer
+			return d.DialContext(ctx, network, addr)
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/filebrowser/80/api/health", nil)
+	rr := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
