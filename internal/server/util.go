@@ -22,7 +22,10 @@ type route struct {
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status     int
+	cookieSet  bool
+	ctxService string
+	ctxPort    int
 }
 
 func parseRoute(path string) (route, int, string, error) {
@@ -99,6 +102,59 @@ func defaultTransport() http.RoundTripper {
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
+	if !r.cookieSet {
+		setContextCookie(r.ResponseWriter, r.ctxService, r.ctxPort)
+		r.cookieSet = true
+	}
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if !r.cookieSet {
+		setContextCookie(r.ResponseWriter, r.ctxService, r.ctxPort)
+		r.cookieSet = true
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func parseContextCookie(r *http.Request) (string, int, bool) {
+	c, err := r.Cookie("alugil_ctx")
+	if err != nil {
+		return "", 0, false
+	}
+	parts := strings.SplitN(c.Value, ":", 2)
+	if len(parts) != 2 {
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(parts[1])
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, false
+	}
+	return parts[0], port, true
+}
+
+func setContextCookie(w http.ResponseWriter, service string, port int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:  "alugil_ctx",
+		Value: fmt.Sprintf("%s:%d", service, port),
+		Path:  "/",
+	})
+}
+
+func buildRoute(service string, port int, path string) route {
+	upstreamPath := "/"
+	if len(path) > 0 {
+		upstreamPath = path
+	}
+	return route{
+		service: service,
+		port:    port,
+		path:    upstreamPath,
+		url: &url.URL{
+			Scheme: "http",
+			Host:   fmt.Sprintf("%s:%d", service, port),
+			Path:   upstreamPath,
+		},
+	}
 }

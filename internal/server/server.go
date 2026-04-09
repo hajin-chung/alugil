@@ -58,6 +58,12 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	route, status, msg, err := parseRoute(r.URL.Path)
 	if err != nil {
+		svc, port, ok := parseContextCookie(r)
+		if ok && s.cfg.Allows(svc, port) {
+			route = buildRoute(svc, port, r.URL.Path)
+			s.serveProxy(w, r, route, started)
+			return
+		}
 		http.Error(w, msg, status)
 		s.log("warn", "request rejected", map[string]any{
 			"method":      r.Method,
@@ -69,6 +75,12 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.cfg.Allows(route.service, route.port) {
+		svc, port, ok := parseContextCookie(r)
+		if ok && s.cfg.Allows(svc, port) {
+			route = buildRoute(svc, port, r.URL.Path)
+			s.serveProxy(w, r, route, started)
+			return
+		}
 		http.Error(w, "not found", http.StatusNotFound)
 		s.log("warn", "request rejected", map[string]any{
 			"method":      r.Method,
@@ -80,6 +92,10 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.serveProxy(w, r, route, started)
+}
+
+func (s *Server) serveProxy(w http.ResponseWriter, r *http.Request, route route, started time.Time) {
 	proxy := &httputil.ReverseProxy{
 		Transport: s.transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -108,7 +124,7 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK, ctxService: route.service, ctxPort: route.port}
 	proxy.ServeHTTP(rec, r)
 	s.log("info", "request complete", map[string]any{
 		"method":      r.Method,
